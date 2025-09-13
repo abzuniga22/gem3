@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% block title %}Model {{ m['model'] }} – GEM3{% endblock %}
+{% block content %}
+<h2>{{ m['model'] }}</h2>
+<p class="muted">
+  Organism: {{ m['organism'] }} |
+  Type: {{ m['pro_euk'] }} |
+  Respiration: {{ m['respiration'] }} |
+  Cell type: {{ m['cell_type'] }}
+</p>
+
+<h3>Overview</h3>
+<ul>
+  <li>Reactions: {{ n_rxn }}</li>
+  <li>Metabolites: {{ n_met }}</li>
+  <li>Genes: {{ n_gene }}</li>
+</ul>
+
+<h3>Reactions</h3>
+<table>
+  <tr><th>ID</th><th>Equation</th><th>Pathway</th></tr>
+  {% for r in reactions %}
+  <tr>
+    <td>{{ r['reaction_id'] }}</td>
+    <td>{{ r['equation'] }}</td>
+    <td>{{ r['pathway'] }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% if rpages > 1 %}
+  <div class="muted">
+    Page {{ rpage }} of {{ rpages }}
+    {% if rpage > 1 %}
+      <a href="{{ url_for('model_detail', model=m['model'], rpage=1,   mpage=mpage, gpage=gpage) }}">First</a>
+      <a href="{{ url_for('model_detail', model=m['model'], rpage=rpage-1, mpage=mpage, gpage=gpage) }}">Prev</a>
+    {% endif %}
+    {% if rpage < rpages %}
+      <a href="{{ url_for('model_detail', model=m['model'], rpage=rpage+1, mpage=mpage, gpage=gpage) }}">Next</a>
+      <a href="{{ url_for('model_detail', model=m['model'], rpage=rpages, mpage=mpage, gpage=gpage) }}">Last</a>
+    {% endif %}
+  </div>
+{% endif %}
+
+<h3>Metabolites</h3>
+<table>
+  <tr><th>ID</th><th>Name</th><th>Formula</th><th>Compartment</th></tr>
+  {% for mt in metabolites %}
+  <tr>
+    <td>{{ mt['metabolite_id'] }}</td>
+    <td>{{ mt['name'] }}</td>
+    <td>{{ mt['formula'] }}</td>
+    <td>{{ mt['compartment'] }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% if mpages > 1 %}
+  <div class="muted">
+    Page {{ mpage }} of {{ mpages }}
+    {% if mpage > 1 %}
+      <a href="{{ url_for('model_detail', model=m['model'], rpage=rpage, mpage=1,     gpage=gpage) }}">First</a>
+      <a href="{{ url_for('model_detail', model=m['model'], rpage=rpage, mpage=mpage-1, gpage=gpage) }}">Prev</a>
+    {% endif %}
+    {% if mpage < mpages %}
+      <a href="{{ url_for('model_detail', model=m['model'], rpage=rpage, mpage=mpage+1, gpage=gpage) }}">Next</a>
+      <a href="{{ url_for('model_detail', model=m['model'], rpage=rpage, mpage=mpages,  gpage=gpage) }}">Last</a>
+    {% endif %}
+  </div>
+{% endif %}
+
+<h3>Genes</h3>
+<table>
+  <tr><th>ID</th><th>Protein</th></tr>
+  {% for g in genes %}
+  <tr>
+    <td>{{ g['gene_id'] }}</td>
+    <td>{{ g['protein'] }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% if gpages > 1 %}
+  <div class="muted">
+    Page {{ gpage }} of {{ gpages }}
+    {% if gpage > 1 %}
+      <a href="{{ url_for('model_detail', model=m['model'], rpage=rpage, mpage=mpage, gpage=1) }}">First</a>
+      <a href="{{ url_for('model_detail', model=m['model'], rpage=rpage, mpage=mpage, gpage=gpage-1) }}">Prev</a>
+    {% endif %}
+    {% if gpage < gpages %}
+      <a href="{{ url_for('model_detail', model=m['model'], rpage=rpage, mpage=mpage, gpage=gpage+1) }}">Next</a>
+      <a href="{{ url_for('model_detail', model=m['model'], rpage=rpage, mpage=mpage, gpage=gpages) }}">Last</a>
+    {% endif %}
+  </div>
+{% endif %}
+{% endblock %}

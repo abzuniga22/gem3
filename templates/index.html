@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% block title %}GEM3 – Search{% endblock %}
+{% block content %}
+
+<form method="get" action="/">
+  <input type="text" name="q" placeholder="Search..." value="{{ q|default('') }}" />
+  <button type="submit">Search</button>
+  <fieldset style="display:inline-block; margin-left:12px;">
+    <legend>Scopes</legend>
+    <label><input type="checkbox" name="scope" value="model"     {% if 'model' in scopes %}checked{% endif %}> Model</label>
+    <label><input type="checkbox" name="scope" value="reaction"  {% if 'reaction' in scopes %}checked{% endif %}> Reaction</label>
+    <label><input type="checkbox" name="scope" value="metabolite"{% if 'metabolite' in scopes %}checked{% endif %}> Metabolite</label>
+    <label><input type="checkbox" name="scope" value="gene"      {% if 'gene' in scopes %}checked{% endif %}> Gene</label>
+  </fieldset>
+</form>
+
+{% if q %}
+  <h3>Models</h3>
+  {% if results.model %}
+    <table>
+        
+      <tr><th>Model</th><th>Organism</th><th>Type</th><th>Respiration</th><th>Cell Type</th></tr>
+      {% for r in results.model %}
+      <tr>
+        <td><a href="{{ url_for('model_detail', model=r['model_name']) }}">{{ r['model_name'] }}</a></td>
+        <td>{{ r['organism'] }}</td>
+        <td>{{ r['pro_euk'] }}</td>
+        <td>{{ r['respiration'] }}</td>
+        <td>{{ r['cell_type'] }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  {% else %}<p class="muted">No model matches.</p>{% endif %}
+
+  <h3>Reactions</h3>
+  {% if results.reaction %}
+    <table>
+      <tr><th>Model</th><th>Reaction ID</th><th>Equation</th><th>Pathway</th><th>Rev</th></tr>
+      {% for r in results.reaction %}
+      <tr>
+        <td><a href="{{ url_for('model_detail', model=r['model_name']) }}">{{ r['model_name'] }}</a></td>
+        <td>{{ r['reaction_id'] }}</td>
+        <td>{{ r['equation'] }}</td>
+        <td>{{ r['pathway'] }}</td>
+        <td>{{ r['reversible'] }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  {% else %}<p class="muted">No reaction matches.</p>{% endif %}
+
+  <h3>Metabolites</h3>
+  {% if results.metabolite %}
+    <table>
+      <tr><th>Model</th><th>Metabolite ID</th><th>Name</th><th>Formula</th><th>Compartment</th></tr>
+      {% for r in results.metabolite %}
+      <tr>
+        <td><a href="{{ url_for('model_detail', model=r['model_name']) }}">{{ r['model_name'] }}</a></td>
+        <td>{{ r['metabolite_id'] }}</td>
+        <td>{{ r['name'] }}</td>
+        <td>{{ r['formula'] }}</td>
+        <td>{{ r['compartment'] }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  {% else %}<p class="muted">No metabolite matches.</p>{% endif %}
+
+  <h3>Genes</h3>
+  {% if results.gene %}
+    <table>
+      <tr><th>Model</th><th>Gene ID</th><th>Protein</th></tr>
+      {% for r in results.gene %}
+      <tr>
+        <td><a href="{{ url_for('model_detail', model=r['model_name']) }}">{{ r['model_name'] }}</a></td>
+        <td>{{ r['gene_id'] }}</td>
+        <td>{{ r['protein'] }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  {% else %}<p class="muted">No gene matches.</p>{% endif %}
+{% endif %}
+{% endblock %}

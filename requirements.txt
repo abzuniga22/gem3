@@ -1,0 +1,19 @@
+
+# --------------------------- README (how to run) ---------------------------
+# 1) Put this folder next to GEM3.db and a files/ directory with SBML files:
+#    files/<model>.xml  (e.g., iML1515.xml)
+# 2) Ensure the views in init_views.sql match your column names.
+#    Load them once:
+#       sqlite3 GEM3.db < init_views.sql
+# 3) Run locally:
+#       python3 -m venv venv && source venv/bin/activate
+#       pip install -r requirements.txt
+#       flask --app app.py run
+# 4) Deploy on Render/Heroku (add gunicorn & Procfile if desired).
+
+# --------------------------- requirements.txt ---------------------------
+# Flask
+# gunicorn # for deployment (Render/Heroku)
+# sqlite (built-in)
+Flask==3.0.2
+gunicorn

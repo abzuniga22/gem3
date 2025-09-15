@@ -17,6 +17,23 @@ def get_db():
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
     return conn
+
+@app.route("/debug/health")
+def debug_health():
+    import os, sqlite3
+    p = DB_PATH
+    out = [f"DB_PATH={p}",
+           f"EXISTS={os.path.exists(p)}",
+           f"SIZE={os.path.getsize(p) if os.path.exists(p) else 0}"]
+    try:
+        with sqlite3.connect(p) as c:
+            names = [r[0] for r in c.execute(
+                "SELECT name FROM sqlite_master WHERE type in ('table','view') LIMIT 10")]
+        out.append("TABLES=" + ", ".join(names))
+    except Exception as e:
+        out.append(f"SQLITE_ERR={e!r}")
+    return "<pre>" + "\n".join(out) + "</pre>"
+
 # ------------------ Search (home) ------------------
 @app.route("/", methods=["GET"])
 def index():

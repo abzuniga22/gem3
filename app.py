@@ -1,61 +1,19 @@
+
 import os
 import sqlite3
 from math import ceil
 from flask import Flask, render_template, request, abort
-import os, sqlite3, zipfile
 
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(APP_DIR, "GEM3.db")
 
 app = Flask(__name__)
-
-
-
-APP_DIR   = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR  = os.getenv("DATA_DIR", APP_DIR)  # point to a Render disk if you add one
-DB_PATH   = os.path.join(DATA_DIR, "GEM3.db")
-SQL_ZIP   = os.path.join(APP_DIR, "GEM3.sql.zip")  # lives in your repo
-SQL_PATH  = os.path.join(APP_DIR, "GEM3.sql")      # temp after unzip
-
-def init_db_if_needed():
-    # If DB exists, nothing to do
-    if os.path.exists(DB_PATH):
-        return
-
-    # Make sure data dir exists (esp. if using a Render disk)
-    os.makedirs(DATA_DIR, exist_ok=True)
-
-    # Unzip the SQL dump
-    if not os.path.exists(SQL_ZIP):
-        raise RuntimeError("GEM3.sql.zip not found in app directory.")
-    with zipfile.ZipFile(SQL_ZIP, "r") as zf:
-        # Expecting a single file (GEM3.sql). If your zip name differs, adjust.
-        zf.extractall(APP_DIR)
-
-    # Create SQLite DB and import the SQL
-    print("Creating SQLite DB from GEM3.sql ...")
-    conn = sqlite3.connect(DB_PATH)
-    try:
-        # Load SQL text and execute as a script
-        with open(SQL_PATH, "r", encoding="utf-8") as f:
-            sql_text = f.read()
-        conn.executescript("PRAGMA journal_mode=OFF;")
-        conn.executescript(sql_text)
-        conn.commit()
-    finally:
-        conn.close()
-
-    # Optional: clean up the .sql after import to keep the slug small at runtime
-    try:
-        os.remove(SQL_PATH)
-    except OSError:
-        pass
-
-# Call this once on startup (before using the DB)
-init_db_if_needed()
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
 # ------------------ Search (home) ------------------
 @app.route("/", methods=["GET"])
 def index():

@@ -13,6 +13,31 @@ def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+    
+@app.route("/debug/health")
+def debug_health():
+    import os, sqlite3, binascii
+    info = []
+    info.append(f"APP_DIR={APP_DIR}")
+    info.append(f"DATA_DIR={DATA_DIR}")
+    info.append(f"DB_PATH={DB_PATH}")
+    exists = os.path.exists(DB_PATH)
+    size = os.path.getsize(DB_PATH) if exists else 0
+    info.append(f"DB_EXISTS={exists}")
+    info.append(f"DB_SIZE={size} bytes")
+    if exists:
+        with open(DB_PATH, "rb") as f:
+            head = f.read(32)
+        info.append(f"HEAD_TEXT={head[:16]!r}")  # should be b'SQLite format 3\\x00'
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                rows = conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type IN ('table','view') LIMIT 10"
+                ).fetchall()
+            info.append("TABLES=" + ", ".join(r[0] for r in rows))
+        except Exception as e:
+            info.append(f"SQLITE_ERR={e!r}")
+    return "<pre>" + "\n".join(info) + "</pre>"
 
 # ------------------ Search (home) ------------------
 @app.route("/", methods=["GET"])

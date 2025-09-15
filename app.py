@@ -4,15 +4,24 @@ from math import ceil
 from flask import Flask, render_template, request, abort
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(APP_DIR, "GEM3.db")
+DB_PATH = os.getenv("DB_PATH", os.path.join(APP_DIR, "GEM3.db"))
 
 app = Flask(__name__)
+
+# If DB doesn't exist locally, try to fetch it from Google Drive
+DB_URL = os.getenv("DB_URL")
+if DB_URL and not os.path.exists(DB_PATH):
+    print(f"Downloading GEM3.db from {DB_URL} ...")
+    r = requests.get(DB_URL)
+    r.raise_for_status()
+    with open(DB_PATH, "wb") as f:
+        f.write(r.content)
+    print("Download complete!")
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
-
 # ------------------ Search (home) ------------------
 @app.route("/", methods=["GET"])
 def index():

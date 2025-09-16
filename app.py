@@ -14,20 +14,97 @@ print("DB_PATH :", DB_PATH)
 app = Flask(__name__)
 
 # --- autolink filter ---
-_LINKERS = [
-    (re.compile(r"\bC(\d{5})\b"), lambda m: f'<a target="_blank" rel="noopener" href="https://www.kegg.jp/entry/C{m.group(1)}">C{m.group(1)}</a>'),
-    (re.compile(r"\bR(\d{5})\b"), lambda m: f'<a target="_blank" rel="noopener" href="https://www.kegg.jp/entry/R{m.group(1)}">R{m.group(1)}</a>'),
-    (re.compile(r"\b(?:map|hsa|eco)\d{5}\b"), lambda m: f'<a target="_blank" rel="noopener" href="https://www.kegg.jp/pathway/{m.group(0)}">{m.group(0)}</a>'),
-    (re.compile(r"\b(?:CID|PubChem)\s*:?\s*(\d+)\b", re.I), lambda m: f'<a target="_blank" rel="noopener" href="https://pubchem.ncbi.nlm.nih.gov/compound/{m.group(1)}">{m.group(0)}</a>'),
-    (re.compile(r"\bCHEBI:\d+\b"), lambda m: f'<a target="_blank" rel="noopener" href="https://www.ebi.ac.uk/chebi/searchId.do?chebiId={m.group(0)}">{m.group(0)}</a>'),
-    (re.compile(r"\bHMDB\d{5}\b"), lambda m: f'<a target="_blank" rel="noopener" href="https://hmdb.ca/metabolites/{m.group(0)}">{m.group(0)}</a>'),
-]
+import re
+from markupsafe import Markup, escape
+
+# --- IDs we’ll link ---
+# KEGG compound/reaction (allow optional compartment suffix like _c/_m/etc., not part of link)
+_KEGG_C = re.compile(r'(?<!\w)(C\d{5})(?:_([a-z]))?(?!\w)', re.I)
+_KEGG_R = re.compile(r'(?<!\w)(R\d{5})(?:_([a-z]))?(?!\w)', re.I)
+
+# KEGG pathways: map00010, hsa00010, eco00010
+_KEGG_PATH = re.compile(r'(?<!\w)(?:map|hsa|eco)\d{5}(?!\w)', re.I)
+
+# PubChem CID: “CID: 5793”, “PubChem 5793”
+_PUBCHEM = re.compile(r'\b(?:CID|PubChem)\s*:?\s*(\d+)\b', re.I)
+
+# ChEBI / HMDB
+_CHEBI = re.compile(r'\bCHEBI:(\d+)\b', re.I)
+_HMDB  = re.compile(r'\b(HMDB\d{5})\b')
+
+# EC numbers: EC 1.1.1.1 / EC:1.1.1.1
+_EC    = re.compile(r'\bEC[:\s]+(\d+\.\d+\.\d+\.\d+)\b', re.I)
+
+# MetaNetX
+_MNXM  = re.compile(r'\b(MNXM\d+)\b')  # metabolites
+_MNXR  = re.compile(r'\b(MNXR\d+)\b')  # reactions
+
+# ModelSEED
+_SEED_C = re.compile(r'\b(cpd\d{5})\b', re.I)
+_SEED_R = re.compile(r'\b(rxn\d{5})\b', re.I)
+
+# BiGG metabolites like "glc__D_c", "h2o_c" (lowercase base; single-letter compartment)
+_BIGG_M = re.compile(r'\b([a-z0-9_]{2,})_([acgmpexlrns])\b')
+
+# Optional: KEGG gene locus tags like Avin_00080 → avn:Avin_00080
+_KEGG_ORG_FOR_LOCUS = {"Avin": "avn"}  # add more mappings when you need them
+_LOCUS = re.compile(r'\b([A-Za-z][A-Za-z0-9]{2,10})_([0-9]{3,6})\b')
+
 def autolink_external_ids(value):
     if value is None:
         return ""
     s = escape(str(value))
-    for pat, builder in _LINKERS:
-        s = pat.sub(lambda m: builder(m), s)
+
+    # KEGG C/R (keep suffix outside the link if present)
+    s = _KEGG_C.sub(lambda m: (
+        f'<a target="_blank" rel="noopener" href="https://www.kegg.jp/entry/{m.group(1)}">{m.group(1)}</a>'
+        + (f'_{m.group(2)}' if m.group(2) else '')
+    ), s)
+
+    s = _KEGG_R.sub(lambda m: (
+        f'<a target="_blank" rel="noopener" href="https://www.kegg.jp/entry/{m.group(1)}">{m.group(1)}</a>'
+        + (f'_{m.group(2)}' if m.group(2) else '')
+    ), s)
+
+    # KEGG pathway
+    s = _KEGG_PATH.sub(lambda m:
+        f'<a target="_blank" rel="noopener" href="https://www.kegg.jp/pathway/{m.group(0)}">{m.group(0)}</a>', s)
+
+    # PubChem / ChEBI / HMDB / EC
+    s = _PUBCHEM.sub(lambda m:
+        f'<a target="_blank" rel="noopener" href="https://pubchem.ncbi.nlm.nih.gov/compound/{m.group(1)}">{m.group(0)}</a>', s)
+    s = _CHEBI.sub(lambda m:
+        f'<a target="_blank" rel="noopener" href="https://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:{m.group(1)}">CHEBI:{m.group(1)}</a>', s)
+    s = _HMDB.sub(lambda m:
+        f'<a target="_blank" rel="noopener" href="https://hmdb.ca/metabolites/{m.group(1)}">{m.group(1)}</a>', s)
+    s = _EC.sub(lambda m:
+        f'<a target="_blank" rel="noopener" href="https://www.kegg.jp/entry/{m.group(1)}">EC {m.group(1)}</a>', s)
+
+    # MetaNetX & ModelSEED
+    s = _MNXM.sub(lambda m:
+        f'<a target="_blank" rel="noopener" href="https://www.metanetx.org/chem_info/{m.group(1)}">{m.group(1)}</a>', s)
+    s = _MNXR.sub(lambda m:
+        f'<a target="_blank" rel="noopener" href="https://www.metanetx.org/reac_info/{m.group(1)}">{m.group(1)}</a>', s)
+    s = _SEED_C.sub(lambda m:
+        f'<a target="_blank" rel="noopener" href="https://modelseed.org/biochem/compounds/{m.group(1)}">{m.group(1)}</a>', s)
+    s = _SEED_R.sub(lambda m:
+        f'<a target="_blank" rel="noopener" href="https://modelseed.org/biochem/reactions/{m.group(1)}">{m.group(1)}</a>', s)
+
+    # BiGG metabolite
+    s = _BIGG_M.sub(lambda m: (
+        f'<a target="_blank" rel="noopener" href="http://bigg.ucsd.edu/universal/metabolites/{m.group(1)}">{m.group(1)}</a>'
+        f'_{m.group(2)}'
+    ), s)
+
+    # KEGG gene locus (e.g., Avin_00080)
+    def _link_locus(m):
+        prefix = m.group(1); locus = f"{prefix}_{m.group(2)}"
+        org = _KEGG_ORG_FOR_LOCUS.get(prefix)
+        url = (f"https://www.kegg.jp/dbget-bin/www_bget?{org}:{locus}"
+               if org else f"https://www.kegg.jp/dbget-bin/www_bfind?genes={locus}")
+        return f'<a target="_blank" rel="noopener" href="{url}">{locus}</a>'
+    s = _LOCUS.sub(_link_locus, s)
+
     return Markup(s)
 
 app.jinja_env.filters["autolink"] = autolink_external_ids

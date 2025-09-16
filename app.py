@@ -39,7 +39,7 @@ def autolink_external_ids(value):
     return Markup(s)
 
 # Register the filter for templates
-app = Flask(__name__)
+
 app.jinja_env.filters["autolink"] = autolink_external_ids
 def get_db():
     conn = sqlite3.connect(DB_PATH)

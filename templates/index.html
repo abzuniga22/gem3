@@ -40,8 +40,8 @@
       <tr>
         <td><a href="{{ url_for('model_detail', model=r['model_name']) }}">{{ r['model_name'] }}</a></td>
         <td>{{ r['reaction_id'] }}</td>
-        <td>{{ r['equation'] }}</td>
-        <td>{{ r['pathway'] }}</td>
+        <td>{{ r['equation']  | autoloink }}</td>
+        <td>{{ r['pathway']    | autolink }}</td>
         <td>{{ r['reversible'] }}</td>
       </tr>
       {% endfor %}
@@ -55,8 +55,8 @@
       {% for r in results.metabolite %}
       <tr>
         <td><a href="{{ url_for('model_detail', model=r['model_name']) }}">{{ r['model_name'] }}</a></td>
-        <td>{{ r['metabolite_id'] }}</td>
-        <td>{{ r['name'] }}</td>
+        <td>{{ r['metabolite_id'] | autolink }}</td>
+        <td>{{ r['name'] | auto_link }}</td>
         <td>{{ r['formula'] }}</td>
         <td>{{ r['compartment'] }}</td>
       </tr>
@@ -71,8 +71,8 @@
       {% for r in results.gene %}
       <tr>
         <td><a href="{{ url_for('model_detail', model=r['model_name']) }}">{{ r['model_name'] }}</a></td>
-        <td>{{ r['gene_id'] }}</td>
-        <td>{{ r['protein'] }}</td>
+        <td>{{ r['gene_id'| autolink ] }}</td>
+        <td>{{ r['protein'] | autolink }}</td>
       </tr>
       {% endfor %}
     </table>

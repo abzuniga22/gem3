@@ -7,6 +7,8 @@
   Type: {{ m['pro_euk'] }} |
   Respiration: {{ m['respiration'] }} |
   Cell type: {{ m['cell_type'] }}
+  {% set p = paper_url(m['model']) %}
+  {% if p %} | Reference: <a href="{{ p }}" target="_blank" rel="noopener">paper</a>{% endif %}
 </p>
 
 <h3>Overview</h3>

@@ -21,9 +21,9 @@
   <tr><th>ID</th><th>Equation</th><th>Pathway</th></tr>
   {% for r in reactions %}
   <tr>
-    <td>{{ r['reaction_id'] }}</td>
-    <td>{{ r['equation'] }}</td>
-    <td>{{ r['pathway'] }}</td>
+    <td>{{ r['reaction_id'] | autolink }}</td>
+    <td>{{ r['equation'] | autolink}}</td>
+    <td>{{ r['pathway']  | autolink }}</td>
   </tr>
   {% endfor %}
 </table>
@@ -46,8 +46,8 @@
   <tr><th>ID</th><th>Name</th><th>Formula</th><th>Compartment</th></tr>
   {% for mt in metabolites %}
   <tr>
-    <td>{{ mt['metabolite_id'] }}</td>
-    <td>{{ mt['name'] }}</td>
+    <td>{{ mt['metabolite_id'] | autolink }}</td>
+    <td>{{ mt['name']  | autolink }}</td>
     <td>{{ mt['formula'] }}</td>
     <td>{{ mt['compartment'] }}</td>
   </tr>
@@ -72,8 +72,8 @@
   <tr><th>ID</th><th>Protein</th></tr>
   {% for g in genes %}
   <tr>
-    <td>{{ g['gene_id'] }}</td>
-    <td>{{ g['protein'] }}</td>
+    <td>{{ g['gene_id'] | autolink }}</td>
+    <td>{{ g['protein'] | autolink  }}</td>
   </tr>
   {% endfor %}
 </table>

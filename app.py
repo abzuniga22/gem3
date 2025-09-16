@@ -126,6 +126,61 @@ def debug_health():
     except Exception as e:
         out.append(f"SQLITE_ERR={e!r}")
     return "<pre>" + "\n".join(out) + "</pre>"
+
+# --- Model → primary paper URL (quick, no-DB solution) ---
+MODEL_PAPERS = {
+    "CLasA4_BM7": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
+    "CLasA4_M13": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
+    "CLasA4_M14": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
+    "CLasA4_M15": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
+    "CLasF17_BM7": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
+    "CLasF17_M13": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
+    "CLasF17_M14": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
+    "CLasF17_M15": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
+    "CLasIshi_BM7": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
+    "CLasIshi_M13": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
+    "CLasIshi_M14": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
+    "CLasIshi_M15": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
+    "CLasYCPsy_BM7": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
+    "CLasYCPsy_M13": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
+    "CLasYCPsy_M14": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
+    "CLasYCPsy_M15": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
+    "CLasgxpsy_BM7": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
+    "CLasgxpsy_M13": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
+    "CLasgxpsy_M14": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
+    "CLasgxpsy_M15": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
+    "CLaspsy62_BM7": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
+    "CLaspsy62_M13": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
+    "CLaspsy62_M14": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
+    "CLaspsy62_M15": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
+    "LcBT1_BM7": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
+    "LcBT1_M13": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
+    "LcBT1_M14": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
+    "LcBT1_M15": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
+    "SA300_a": "https://pubmed.ncbi.nlm.nih.gov/30625152/",
+    "SA300_an": "https://pubmed.ncbi.nlm.nih.gov/30625152/",
+    "iCZ843_H2": "https://pubmed.ncbi.nlm.nih.gov/27372244/",
+    "iCZ843_M2": "https://pubmed.ncbi.nlm.nih.gov/27372244/",
+    "iCZ843_PA2": "https://pubmed.ncbi.nlm.nih.gov/27372244/",
+    "iDT1278": "https://pubmed.ncbi.nlm.nih.gov/32551229/",
+    "iGC535_Benzene": "https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1009828",
+    "iGC535_Chlorobenzene": "https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1009828",
+    "iGC535_FructoseHigh": "https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1009828",
+    "iGC535_FructoseLow": "https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1009828",
+    "iGC535_HCO3High": "https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1009828",
+    "iGC535_HCO3Low": "https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1009828",
+    "iGC535_Phenol": "https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1009828",
+    "iGC535_Pyruvate": "https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1009828",
+    "iGC535_Toluene": "https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1009828",
+}
+
+def paper_url(model_name: str) -> str | None:
+    return MODEL_PAPERS.get(model_name)
+
+# expose to Jinja
+app.jinja_env.globals["paper_url"] = paper_url
+
+
 # ------------------ Search (home) ------------------
 @app.route("/", methods=["GET"])
 def index():

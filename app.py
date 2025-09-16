@@ -11,7 +11,36 @@ APP_DIR  = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.getenv("DATA_DIR", APP_DIR)  # we'll set DATA_DIR on Render
 DB_PATH  = os.path.join(DATA_DIR, "GEM3.db")
 app = Flask(__name__)
+import re
+from markupsafe import Markup, escape
 
+# Patterns → link builders
+_LINKERS = [
+    # KEGG Compound IDs: C00001
+    (re.compile(r"\bC(\d{5})\b"), lambda m: f'<a target="_blank" rel="noopener" href="https://www.kegg.jp/entry/C{m.group(1)}">C{m.group(1)}</a>'),
+    # KEGG Reaction IDs: R00010
+    (re.compile(r"\bR(\d{5})\b"), lambda m: f'<a target="_blank" rel="noopener" href="https://www.kegg.jp/entry/R{m.group(1)}">R{m.group(1)}</a>'),
+    # KEGG Pathways: map00010, hsa00010, eco00010, etc.
+    (re.compile(r"\b(?:map|hsa|eco)\d{5}\b"), lambda m: f'<a target="_blank" rel="noopener" href="https://www.kegg.jp/pathway/{m.group(0)}">{m.group(0)}</a>'),
+    # PubChem CIDs written as "CID: 5793" or "PubChem 5793"
+    (re.compile(r"\b(?:CID|PubChem)\s*:?\s*(\d+)\b", re.I), lambda m: f'<a target="_blank" rel="noopener" href="https://pubchem.ncbi.nlm.nih.gov/compound/{m.group(1)}">{m.group(0)}</a>'),
+    # (Optional) ChEBI & HMDB if you have them in text:
+    (re.compile(r"\bCHEBI:\d+\b"), lambda m: f'<a target="_blank" rel="noopener" href="https://www.ebi.ac.uk/chebi/searchId.do?chebiId={m.group(0)}">{m.group(0)}</a>'),
+    (re.compile(r"\bHMDB\d{5}\b"), lambda m: f'<a target="_blank" rel="noopener" href="https://hmdb.ca/metabolites/{m.group(0)}">{m.group(0)}</a>'),
+]
+
+def autolink_external_ids(value):
+    """Escape text then turn known IDs into outbound links."""
+    if value is None:
+        return ""
+    s = escape(str(value))
+    for pat, builder in _LINKERS:
+        s = pat.sub(lambda m: builder(m), s)
+    return Markup(s)
+
+# Register the filter for templates
+app = Flask(__name__)
+app.jinja_env.filters["autolink"] = autolink_external_ids
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row

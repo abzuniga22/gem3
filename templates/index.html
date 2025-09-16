@@ -40,7 +40,7 @@
       <tr>
         <td><a href="{{ url_for('model_detail', model=r['model_name']) }}">{{ r['model_name'] }}</a></td>
         <td>{{ r['reaction_id'] }}</td>
-        <td>{{ r['equation']  | autoloink }}</td>
+        <td>{{ r['equation']  | autolink }}</td>
         <td>{{ r['pathway']    | autolink }}</td>
         <td>{{ r['reversible'] }}</td>
       </tr>
@@ -56,7 +56,7 @@
       <tr>
         <td><a href="{{ url_for('model_detail', model=r['model_name']) }}">{{ r['model_name'] }}</a></td>
         <td>{{ r['metabolite_id'] | autolink }}</td>
-        <td>{{ r['name'] | auto_link }}</td>
+        <td>{{ r['name'] | autolink }}</td>
         <td>{{ r['formula'] }}</td>
         <td>{{ r['compartment'] }}</td>
       </tr>

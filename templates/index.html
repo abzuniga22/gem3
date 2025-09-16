@@ -19,16 +19,20 @@
   {% if results.model %}
     <table>
         
-      <tr><th>Model</th><th>Organism</th><th>Type</th><th>Respiration</th><th>Cell Type</th></tr>
-      {% for r in results.model %}
-      <tr>
-        <td><a href="{{ url_for('model_detail', model=r['model_name']) }}">{{ r['model_name'] }}</a></td>
-        <td>{{ r['organism'] }}</td>
-        <td>{{ r['pro_euk'] }}</td>
-        <td>{{ r['respiration'] }}</td>
-        <td>{{ r['cell_type'] }}</td>
-      </tr>
-      {% endfor %}
+      <tr><th>Model</th><th>Organism</th><th>Type</th><th>Respiration</th><th>Cell Type</th><th>Paper</th></tr>
+{% for r in results.model %}
+<tr>
+  <td><a href="{{ url_for('model_detail', model=r['model_name']) }}">{{ r['model_name'] }}</a></td>
+  <td>{{ r['organism'] }}</td>
+  <td>{{ r['pro_euk'] }}</td>
+  <td>{{ r['respiration'] }}</td>
+  <td>{{ r['cell_type'] }}</td>
+  <td>
+    {% set p = paper_url(r['model_name']) %}
+    {% if p %}<a href="{{ p }}" target="_blank" rel="noopener">📄</a>{% endif %}
+  </td>
+</tr>
+{% endfor %}
     </table>
   {% else %}<p class="muted">No model matches.</p>{% endif %}
 

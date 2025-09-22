@@ -74,11 +74,12 @@ def autolink_external_ids(value):
     s = _PUBCHEM.sub(lambda m:
         f'<a target="_blank" rel="noopener" href="https://pubchem.ncbi.nlm.nih.gov/compound/{m.group(1)}">{m.group(0)}</a>', s)
     s = _CHEBI.sub(lambda m:
-        f'<a target="_blank" rel="noopener" href="https://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:{m.group(1)}'>CHEBI:{m.group(1)}</a>', s)
+    f'<a target="_blank" rel="noopener" href="https://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:{m.group(1)}">CHEBI:{m.group(1)}</a>', s)
+
     s = _HMDB.sub(lambda m:
         f'<a target="_blank" rel="noopener" href="https://hmdb.ca/metabolites/{m.group(1)}">{m.group(1)}</a>', s)
     s = _EC.sub(lambda m:
-        f'<a target="_blank" rel="noopener" href="https://www.kegg.jp/entry/{m.group(1)}'>EC {m.group(1)}</a>', s)
+    f'<a target="_blank" rel="noopener" href="https://www.kegg.jp/entry/{m.group(1)}">EC {m.group(1)}</a>', s)
 
     # MetaNetX & ModelSEED
     s = _MNXM.sub(lambda m:

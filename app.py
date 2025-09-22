@@ -1,11 +1,14 @@
-import os, sqlite3, re, csv, io
+import os
+import sqlite3
+import re
 from math import ceil
 from flask import (
-    Flask, render_template, request, abort,
-    send_from_directory, url_for, jsonify, Response
+    Flask, render_template, render_template_string, request, abort,
+    send_from_directory, url_for, jsonify
 )
 from markupsafe import Markup, escape
 
+# --- Paths & config ---
 APP_DIR  = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.getenv("DATA_DIR", APP_DIR)
 DB_PATH  = os.path.join(DATA_DIR, "GEM3.db")
@@ -16,7 +19,7 @@ print("DB_PATH :", DB_PATH)
 
 app = Flask(__name__)
 
-# --- autolink filter ---
+# ---------------------- autolink filter ----------------------
 # IDs we’ll link ---
 # KEGG compound/reaction (allow optional compartment suffix like _c/_m/etc., not part of link)
 _KEGG_C = re.compile(r'(?<!\w)(C\d{5})(?:_([a-z]))?(?!\w)', re.I)
@@ -74,12 +77,11 @@ def autolink_external_ids(value):
     s = _PUBCHEM.sub(lambda m:
         f'<a target="_blank" rel="noopener" href="https://pubchem.ncbi.nlm.nih.gov/compound/{m.group(1)}">{m.group(0)}</a>', s)
     s = _CHEBI.sub(lambda m:
-    f'<a target="_blank" rel="noopener" href="https://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:{m.group(1)}">CHEBI:{m.group(1)}</a>', s)
-
+        f'<a target="_blank" rel="noopener" href="https://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:{m.group(1)}">CHEBI:{m.group(1)}</a>', s)
     s = _HMDB.sub(lambda m:
         f'<a target="_blank" rel="noopener" href="https://hmdb.ca/metabolites/{m.group(1)}">{m.group(1)}</a>', s)
     s = _EC.sub(lambda m:
-    f'<a target="_blank" rel="noopener" href="https://www.kegg.jp/entry/{m.group(1)}">EC {m.group(1)}</a>', s)
+        f'<a target="_blank" rel="noopener" href="https://www.kegg.jp/entry/{m.group(1)}">EC {m.group(1)}</a>', s)
 
     # MetaNetX & ModelSEED
     s = _MNXM.sub(lambda m:
@@ -110,14 +112,14 @@ def autolink_external_ids(value):
 
 app.jinja_env.filters["autolink"] = autolink_external_ids
 
-
+# ---------------------- DB helper ----------------------
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
     return conn
 
-
+# ---------------------- Health check ----------------------
 @app.route("/debug/health")
 def debug_health():
     p = DB_PATH
@@ -130,8 +132,7 @@ def debug_health():
         out.append(f"SQLITE_ERR={e!r}")
     return "<pre>" + "\n".join(out) + "</pre>"
 
-
-# --- Model → primary paper URL (quick, no-DB solution) ---
+# ---------------------- Model → paper URL ----------------------
 MODEL_PAPERS = {
     "CLasA4_BM7": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
     "CLasA4_M13": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7403731/",
@@ -184,61 +185,116 @@ def paper_url(model_name: str) -> str | None:
 # expose to Jinja
 app.jinja_env.globals["paper_url"] = paper_url
 
-MODELS_DIR = os.path.join(app.root_path, "static", "models")
+# ---------------------- Model files discovery ----------------------
+# NOTE: only file downloads (.xml/.mat/.json) are supported; no table CSV downloads.
 EXT_ORDER = {".xml": 0, ".mat": 1, ".json": 2}  # desired display order
 
+# Environment override for model directory.
+MODELS_DIR_ENV = os.getenv("MODELS_DIR")
+
+def _compute_model_dirs():
+    """Compute directories to search, in priority order."""
+    dirs = []
+    if MODELS_DIR_ENV and os.path.isdir(MODELS_DIR_ENV):
+        dirs.append(MODELS_DIR_ENV)
+    # project static bundle
+    dirs.append(os.path.join(app.root_path, "static", "models"))
+    # disk-mounted path inside DATA_DIR (e.g., /var/data/models)
+    dirs.append(os.path.join(DATA_DIR, "models"))
+    # filter to those that actually exist
+    return [d for d in dirs if os.path.isdir(d)]
+
+# Build at request-time to avoid issues during import
+def _iter_model_files():
+    """Yield (base_dir, filename) pairs for files in the configured model dirs."""
+    seen = set()
+    for base in _compute_model_dirs():
+        try:
+            for f in os.listdir(base):
+                p = os.path.join(base, f)
+                if os.path.isfile(p) and f not in seen:
+                    seen.add(f)
+                    yield base, f
+        except FileNotFoundError:
+            continue
 
 def get_model_groups():
-    try:
-        files = [f for f in os.listdir(MODELS_DIR)
-                 if os.path.isfile(os.path.join(MODELS_DIR, f))]
-    except FileNotFoundError:
-        files = []
-
+    """Return a sorted list: [(model_name, [(file_name, url), ...]), ...]"""
     groups = {}
-    for f in files:
+    for base, f in _iter_model_files():
         name, ext = os.path.splitext(f)
-        # only include the three types you care about
         if ext.lower() not in EXT_ORDER:
             continue
-        groups.setdefault(name, []).append(f)
+        groups.setdefault(name, []).append((base, f))
 
-    # turn into a sorted structure: [(model_name, [(file_name, url), ...]), ...]
     out = []
     for model_name, flist in groups.items():
-        flist.sort(key=lambda fn: EXT_ORDER.get(os.path.splitext(fn)[1].lower(), 99))
+        flist.sort(key=lambda t: EXT_ORDER.get(os.path.splitext(t[1])[1].lower(), 99))
         out.append((
             model_name,
-            [(fn, url_for("download_model", filename=fn)) for fn in flist]
+            [(fn, url_for("download_model", filename=fn)) for _, fn in flist]
         ))
-    out.sort(key=lambda x: x[0].lower())  # sort models alphabetically
+    out.sort(key=lambda x: x[0].lower())
     return out
-
-
-@app.route("/model")
-def model_page():
-    model_groups = get_model_groups()
-    return render_template("model.html", model_groups=model_groups)
-
 
 @app.route("/download/<path:filename>")
 def download_model(filename):
+    """Serve a model file from any configured model directory."""
     safe_name = os.path.basename(filename)
-    full_path = os.path.join(MODELS_DIR, safe_name)
-    if not os.path.isfile(full_path):
-        abort(404)
-    # send as attachment
-    return send_from_directory(
-        MODELS_DIR,
-        safe_name,
-        as_attachment=True,
-        download_name=safe_name,
-        mimetype="application/octet-stream",
-        max_age=31536000
-    )
+    for base, f in _iter_model_files():
+        if f == safe_name:
+            return send_from_directory(
+                base,
+                safe_name,
+                as_attachment=True,
+                download_name=safe_name,
+                mimetype="application/octet-stream",
+                max_age=31536000,
+            )
+    abort(404)
 
+@app.route("/debug/models")
+def debug_models():
+    """Inspect visible model directories & files at runtime."""
+    dirs = _compute_model_dirs()
+    lines = [
+        f"DATA_DIR={DATA_DIR}",
+        f"MODELS_DIR_ENV={MODELS_DIR_ENV}",
+        "SEARCH_DIRS=" + ", ".join(dirs or []),
+    ]
+    for base in (dirs or []):
+        try:
+            items = ", ".join(sorted(os.listdir(base))[:100])  # show first 100
+        except Exception as e:
+            items = f"<error: {e!r}>"
+        lines.append(f"[{base}] -> {items}")
+    return "<pre>" + "\n".join(lines) + "</pre>"
 
-# ------------------ Search (home) ------------------
+# ---------------------- Optional models listing page ----------------------
+@app.route("/model")
+def model_page():
+    """Simple file listing page (does not depend on the detail template)."""
+    model_groups = get_model_groups()
+    tpl = """
+    <h2>Available Model Files</h2>
+    {% if model_groups %}
+      {% for name, files in model_groups %}
+        <details><summary><strong>{{ name }}</strong></summary>
+          <ul>
+            {% for file_name, href in files %}
+              <li><a href="{{ href }}" download>{{ file_name }}</a></li>
+            {% endfor %}
+          </ul>
+        </details>
+      {% endfor %}
+    {% else %}
+      <p>No model files found. Add .xml/.mat/.json files to <code>static/models/</code>
+      or set <code>MODELS_DIR</code>, or mount files at <code>{{ DATA_DIR }}/models</code>.</p>
+    {% endif %}
+    """
+    return render_template_string(tpl, model_groups=model_groups, DATA_DIR=DATA_DIR)
+
+# ---------------------- Search (home) ----------------------
 @app.route("/", methods=["GET"])
 def index():
     q = (request.args.get("q") or "").strip()
@@ -251,21 +307,17 @@ def index():
             c = conn.cursor()
 
             if "model" in scopes:
-                c.execute(
-                    """
+                c.execute("""
                     SELECT model_name, organism, pro_euk, respiration, cell_type
                     FROM model_name
                     WHERE model_name LIKE ? OR IFNULL(organism,'') LIKE ?
                     ORDER BY model_name
                     LIMIT 50
-                    """,
-                    (like, like),
-                )
+                """, (like, like))
                 results["model"] = c.fetchall()
 
             if "reaction" in scopes:
-                c.execute(
-                    """
+                c.execute("""
                     SELECT model_name, reaction_id, abbreviation,
                            IFNULL(reaction,'')   AS equation,
                            IFNULL(pathway,'')    AS pathway,
@@ -276,14 +328,11 @@ def index():
                        OR IFNULL(pathway,'')  LIKE ?
                     ORDER BY model_name, reaction_id
                     LIMIT 50
-                    """,
-                    (like, like, like),
-                )
+                """, (like, like, like))
                 results["reaction"] = c.fetchall()
 
             if "metabolite" in scopes:
-                c.execute(
-                    """
+                c.execute("""
                     SELECT model_name, metabolite_id, name,
                            IFNULL(formula,'')     AS formula,
                            IFNULL(compartment,'') AS compartment
@@ -293,29 +342,23 @@ def index():
                        OR IFNULL(formula,'') LIKE ?
                     ORDER BY model_name, metabolite_id
                     LIMIT 50
-                    """,
-                    (like, like, like),
-                )
+                """, (like, like, like))
                 results["metabolite"] = c.fetchall()
 
             if "gene" in scopes:
-                c.execute(
-                    """
+                c.execute("""
                     SELECT model_name, gene_id, IFNULL(protein,'') AS protein
                     FROM gene
                     WHERE gene_id LIKE ?
                        OR IFNULL(protein,'') LIKE ?
                     ORDER BY model_name, gene_id
                     LIMIT 50
-                    """,
-                    (like, like),
-                )
+                """, (like, like))
                 results["gene"] = c.fetchall()
 
     return render_template("index.html", q=q, scopes=scopes, results=results)
 
-
-# ------------------ Model detail with pagination ------------------
+# ---------------------- Model detail with pagination ----------------------
 @app.route("/model/<model>")
 def model_detail(model):
     PAGE_SIZE = 25
@@ -335,8 +378,7 @@ def model_detail(model):
         c = conn.cursor()
 
         # Model info
-        m = c.execute(
-            """
+        m = c.execute("""
             SELECT model_name AS model,
                    COALESCE(organism,'')     AS organism,
                    COALESCE(pro_euk,'')      AS pro_euk,
@@ -344,9 +386,7 @@ def model_detail(model):
                    COALESCE(cell_type,'')    AS cell_type
             FROM model_name
             WHERE model_name = ?
-            """,
-            (model,),
-        ).fetchone()
+        """, (model,)).fetchone()
         if not m:
             abort(404)
 
@@ -371,8 +411,7 @@ def model_detail(model):
         g_off = (gpage - 1) * PAGE_SIZE
 
         # Slices
-        reactions = c.execute(
-            """
+        reactions = c.execute("""
             SELECT reaction_id,
                    IFNULL(reaction,'') AS equation,
                    IFNULL(pathway,'')  AS pathway
@@ -380,12 +419,9 @@ def model_detail(model):
             WHERE model_name = ?
             ORDER BY reaction_id
             LIMIT ? OFFSET ?
-            """,
-            (model, PAGE_SIZE, r_off),
-        ).fetchall()
+        """, (model, PAGE_SIZE, r_off)).fetchall()
 
-        metabolites = c.execute(
-            """
+        metabolites = c.execute("""
             SELECT metabolite_id, name,
                    IFNULL(formula,'')     AS formula,
                    IFNULL(compartment,'') AS compartment
@@ -393,20 +429,15 @@ def model_detail(model):
             WHERE model_name = ?
             ORDER BY metabolite_id
             LIMIT ? OFFSET ?
-            """,
-            (model, PAGE_SIZE, m_off),
-        ).fetchall()
+        """, (model, PAGE_SIZE, m_off)).fetchall()
 
-        genes = c.execute(
-            """
+        genes = c.execute("""
             SELECT gene_id, IFNULL(protein,'') AS protein
             FROM gene
             WHERE model_name = ?
             ORDER BY gene_id
             LIMIT ? OFFSET ?
-            """,
-            (model, PAGE_SIZE, g_off),
-        ).fetchall()
+        """, (model, PAGE_SIZE, g_off)).fetchall()
 
     return render_template(
         "model.html",
@@ -416,11 +447,11 @@ def model_detail(model):
         rpage=rpage, rpages=rpages,
         mpage=mpage, mpages=mpages,
         gpage=gpage, gpages=gpages,
+        model_groups=get_model_groups(),  # show .mat/.xml/.json downloads on the page
     )
 
-
-# ------------------ NEW: lightweight JSON API ------------------
-# GET /api/search?q=...&scope=model&scope=reaction&limit=50&offset=0
+# ---------------------- Optional JSON API (kept) ----------------------
+# If you also want to disable these, you can remove this section or gate with an env flag.
 @app.route("/api/search")
 def api_search():
     q = (request.args.get("q") or "").strip()
@@ -515,8 +546,6 @@ def api_search():
 
     return jsonify({"q": q, "scopes": scopes, "total": total, "results": data})
 
-
-# GET /api/model/<model>.json?rpage=1&mpage=1&gpage=1
 @app.route("/api/model/<model>.json")
 def api_model(model):
     PAGE_SIZE = int(request.args.get("page_size", 25))
@@ -613,86 +642,7 @@ def api_model(model):
         "genes": genes,
     })
 
-
-# ------------------ NEW: CSV export ------------------
-# /export/model.csv?q=...
-# /export/reaction.csv?q=...
-# /export/metabolite.csv?q=...
-# /export/gene.csv?q=...
-ALLOWED_SCOPES = {"model", "reaction", "metabolite", "gene"}
-
-@app.route("/export/<scope>.csv")
-def export_scope_csv(scope):
-    if scope not in ALLOWED_SCOPES:
-        abort(404)
-
-    q = (request.args.get("q") or "").strip()
-    like = f"%{q}%" if q else None
-
-    def stream_rows():
-        buf = io.StringIO()
-        w = csv.writer(buf)
-        with get_db() as conn:
-            c = conn.cursor()
-            if scope == "model":
-                w.writerow(["model_name", "organism", "pro_euk", "respiration", "cell_type"]) ; yield buf.getvalue(); buf.seek(0); buf.truncate(0)
-                sql = "SELECT model_name, organism, pro_euk, respiration, cell_type FROM model_name"
-                params = ()
-                if like:
-                    sql += " WHERE model_name LIKE ? OR IFNULL(organism,'') LIKE ?"; params = (like, like)
-                sql += " ORDER BY model_name"
-                for row in c.execute(sql, params):
-                    w.writerow([row["model_name"], row["organism"], row["pro_euk"], row["respiration"], row["cell_type"]])
-                    yield buf.getvalue(); buf.seek(0); buf.truncate(0)
-
-            elif scope == "reaction":
-                w.writerow(["model_name", "reaction_id", "abbreviation", "equation", "pathway", "reversible"]) ; yield buf.getvalue(); buf.seek(0); buf.truncate(0)
-                sql = (
-                    "SELECT model_name, reaction_id, abbreviation, IFNULL(reaction,'') AS equation, "
-                    "IFNULL(pathway,'') AS pathway, IFNULL(reversible,'') AS reversible FROM reaction"
-                )
-                params = ()
-                if like:
-                    sql += " WHERE reaction_id LIKE ? OR IFNULL(reaction,'') LIKE ? OR IFNULL(pathway,'') LIKE ?"; params = (like, like, like)
-                sql += " ORDER BY model_name, reaction_id"
-                for row in c.execute(sql, params):
-                    w.writerow([row["model_name"], row["reaction_id"], row["abbreviation"], row["equation"], row["pathway"], row["reversible"]])
-                    yield buf.getvalue(); buf.seek(0); buf.truncate(0)
-
-            elif scope == "metabolite":
-                w.writerow(["model_name", "metabolite_id", "name", "formula", "compartment"]) ; yield buf.getvalue(); buf.seek(0); buf.truncate(0)
-                sql = (
-                    "SELECT model_name, metabolite_id, name, IFNULL(formula,'') AS formula, IFNULL(compartment,'') AS compartment FROM metabolite"
-                )
-                params = ()
-                if like:
-                    sql += " WHERE metabolite_id LIKE ? OR name LIKE ? OR IFNULL(formula,'') LIKE ?"; params = (like, like, like)
-                sql += " ORDER BY model_name, metabolite_id"
-                for row in c.execute(sql, params):
-                    w.writerow([row["model_name"], row["metabolite_id"], row["name"], row["formula"], row["compartment"]])
-                    yield buf.getvalue(); buf.seek(0); buf.truncate(0)
-
-            elif scope == "gene":
-                w.writerow(["model_name", "gene_id", "protein"]) ; yield buf.getvalue(); buf.seek(0); buf.truncate(0)
-                sql = "SELECT model_name, gene_id, IFNULL(protein,'') AS protein FROM gene"
-                params = ()
-                if like:
-                    sql += " WHERE gene_id LIKE ? OR IFNULL(protein,'') LIKE ?"; params = (like, like)
-                sql += " ORDER BY model_name, gene_id"
-                for row in c.execute(sql, params):
-                    w.writerow([row["model_name"], row["gene_id"], row["protein"]])
-                    yield buf.getvalue(); buf.seek(0); buf.truncate(0)
-
-    filename = f"{scope}_export.csv"
-    headers = {
-        "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": f"attachment; filename={filename}",
-        "Cache-Control": "no-store",
-    }
-    return Response(stream_rows(), headers=headers)
-
-
-# ------------------ Local dev entrypoint ------------------
-# On Render, prefer: Start Command = `gunicorn app:app` and do NOT call app.run()
+# ---------------------- Entrypoint ----------------------
+# On Render: Start Command = `gunicorn app:app`
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=int(os.environ.get("PORT", 5000)), debug=True)

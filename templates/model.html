@@ -1,15 +1,26 @@
 {% extends 'base.html' %}
 {% block title %}Model {{ m['model'] }} – GEM3{% endblock %}
 {% block content %}
-<h2>{{ m['model'] }}</h2>
-<p class="muted">
-  Organism: {{ m['organism'] }} |
-  Type: {{ m['pro_euk'] }} |
-  Respiration: {{ m['respiration'] }} |
-  Cell type: {{ m['cell_type'] }}
-  {% set p = paper_url(m['model']) %}
-  {% if p %} | Reference: <a href="{{ p }}" target="_blank" rel="noopener">paper</a>{% endif %}
-</p>
+<header class="page-header">
+  <h2 style="margin-bottom: .25rem;">{{ m['model'] }}</h2>
+  <p class="muted" style="margin-top: 0;">
+    Organism: {{ m['organism'] }} |
+    Type: {{ m['pro_euk'] }} |
+    Respiration: {{ m['respiration'] }} |
+    Cell type: {{ m['cell_type'] }}
+    {% set p = paper_url(m['model']) %}
+    {% if p %} | Reference: <a href="{{ p }}" target="_blank" rel="noopener">paper</a>{% endif %}
+  </p>
+
+  <!-- Quick tools: JSON + CSV exports -->
+  <nav class="toolbar" style="display:flex; gap:.5rem; flex-wrap: wrap; margin: .5rem 0 1rem;">
+    <a class="btn" href="{{ url_for('api_model', model=m['model'], rpage=rpage, mpage=mpage, gpage=gpage) }}">API JSON</a>
+    <a class="btn" href="{{ url_for('export_scope_csv', scope='model', q=m['model']) }}">Models CSV</a>
+    <a class="btn" href="{{ url_for('export_scope_csv', scope='reaction', q=m['model']) }}">Reactions CSV</a>
+    <a class="btn" href="{{ url_for('export_scope_csv', scope='metabolite', q=m['model']) }}">Metabolites CSV</a>
+    <a class="btn" href="{{ url_for('export_scope_csv', scope='gene', q=m['model']) }}">Genes CSV</a>
+  </nav>
+</header>
 
 <h3>Overview</h3>
 <ul>
@@ -19,12 +30,15 @@
 </ul>
 
 <h3>Reactions</h3>
+<p class="muted" style="margin:.25rem 0 .5rem;">
+  <a href="{{ url_for('export_scope_csv', scope='reaction', q=m['model']) }}">Download reactions (CSV)</a>
+</p>
 <table>
   <tr><th>ID</th><th>Equation</th><th>Pathway</th></tr>
   {% for r in reactions %}
   <tr>
     <td>{{ r['reaction_id'] | autolink }}</td>
-    <td>{{ r['equation'] | autolink}}</td>
+    <td>{{ r['equation'] | autolink }}</td>
     <td>{{ r['pathway']  | autolink }}</td>
   </tr>
   {% endfor %}
@@ -44,6 +58,9 @@
 {% endif %}
 
 <h3>Metabolites</h3>
+<p class="muted" style="margin:.25rem 0 .5rem;">
+  <a href="{{ url_for('export_scope_csv', scope='metabolite', q=m['model']) }}">Download metabolites (CSV)</a>
+</p>
 <table>
   <tr><th>ID</th><th>Name</th><th>Formula</th><th>Compartment</th></tr>
   {% for mt in metabolites %}
@@ -70,6 +87,9 @@
 {% endif %}
 
 <h3>Genes</h3>
+<p class="muted" style="margin:.25rem 0 .5rem;">
+  <a href="{{ url_for('export_scope_csv', scope='gene', q=m['model']) }}">Download genes (CSV)</a>
+</p>
 <table>
   <tr><th>ID</th><th>Protein</th></tr>
   {% for g in genes %}
@@ -92,4 +112,23 @@
     {% endif %}
   </div>
 {% endif %}
+
+<!-- Models download section (global binaries) -->
+<section style="margin-top:1.25rem;">
+  <h3>Available Model Files</h3>
+  {% if model_groups %}
+    {% for model_name, files in model_groups %}
+      <details>
+        <summary><strong>{{ model_name }}</strong></summary>
+        <ul>
+          {% for file_name, href in files %}
+            <li><a href="{{ href }}" download>{{ file_name }}</a></li>
+          {% endfor %}
+        </ul>
+      </details>
+    {% endfor %}
+  {% else %}
+    <p class="muted">No model files found. Add .xml/.mat/.json files to <code>static/models/</code> and redeploy.</p>
+  {% endif %}
+</section>
 {% endblock %}

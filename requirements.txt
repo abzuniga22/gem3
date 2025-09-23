@@ -17,3 +17,4 @@
 # sqlite (built-in)
 Flask==3.0.2
 gunicorn
+requests>=2.31

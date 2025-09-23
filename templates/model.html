@@ -14,7 +14,6 @@
 
   <!-- Quick tools: JSON + CSV exports -->
   <nav class="toolbar" style="display:flex; gap:.5rem; flex-wrap: wrap; margin: .5rem 0 1rem;">
-    <a class="btn" href="{{ url_for('api_model', model=m['model'], rpage=rpage, mpage=mpage, gpage=gpage) }}">API JSON</a>
     <a class="btn" href="{{ url_for('export_scope_csv', scope='model', q=m['model']) }}">Models CSV</a>
     <a class="btn" href="{{ url_for('export_scope_csv', scope='reaction', q=m['model']) }}">Reactions CSV</a>
     <a class="btn" href="{{ url_for('export_scope_csv', scope='metabolite', q=m['model']) }}">Metabolites CSV</a>

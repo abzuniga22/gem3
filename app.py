@@ -382,7 +382,8 @@ def model_detail(model):
         rpage=rpage, rpages=rpages,
         mpage=mpage, mpages=mpages,
         gpage=gpage, gpages=gpages,
-        model_groups=get_model_groups()  # template can list files per model
+        model_groups=[(model, get_model_files_for(model))],
+  # template can list files per model
     )
 
 if __name__ == "__main__":

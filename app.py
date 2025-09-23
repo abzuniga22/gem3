@@ -2,6 +2,8 @@ import os, sqlite3, re
 from math import ceil
 from flask import Flask, render_template, request, abort, send_from_directory, url_for
 from markupsafe import Markup, escape
+import requests
+
 
 APP_DIR  = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.getenv("DATA_DIR", APP_DIR)
@@ -12,7 +14,8 @@ print("DATA_DIR:", DATA_DIR)
 print("DB_PATH :", DB_PATH)
 
 app = Flask(__name__)
-
+KEGG_ONLINE_RESOLVE = os.getenv("KEGG_ONLINE_RESOLVE", "1") == "1"
+_KEGG_GENE_CACHE: dict[str,str] = {}
 # --- autolink filter ---
 # KEGG compound/reaction (allow optional compartment suffix like _c/_m/etc., not part of link)
 _KEGG_C = re.compile(r'(?<!\w)(C\d{5})(?:_([a-z]))?(?!\w)', re.I)
@@ -45,6 +48,45 @@ _BIGG_M = re.compile(r'\b([a-z0-9_]{2,})_([acgmpexlrns])\b')
 # Optional: KEGG gene locus tags like Avin_00080 → avn:Avin_00080
 _KEGG_ORG_FOR_LOCUS = {"Avin": "avn"}  # add more mappings when you need them
 _LOCUS = re.compile(r'\b([A-Za-z][A-Za-z0-9]{2,10})_([0-9]{3,6})\b')
+
+def kegg_gene_url(locus: str) -> str:
+    """
+    Resolve a KEGG gene locus like 'RH08_00085' to a direct bget URL:
+      https://www.kegg.jp/dbget-bin/www_bget?<org_code>:<locus>
+    Uses manual mapping first, then KEGG REST find, with a fallback to bfind.
+    """
+    m = _LOCUS.match(locus)
+    if not m:  # not a locus; keep old fallback
+        return f"https://www.kegg.jp/dbget-bin/www_bfind?genes={locus}"
+
+    prefix = m.group(1)
+    # 1) Manual mapping first
+    org = _KEGG_ORG_FOR_LOCUS.get(prefix)
+    if org:
+        return f"https://www.kegg.jp/dbget-bin/www_bget?{org}:{locus}"
+
+    # 2) Cached?
+    if locus in _KEGG_GENE_CACHE:
+        org = _KEGG_GENE_CACHE[locus]
+        return f"https://www.kegg.jp/dbget-bin/www_bget?{org}:{locus}"
+
+    # 3) Online resolve via KEGG REST (fast; plain text)
+    if KEGG_ONLINE_RESOLVE:
+        try:
+            r = requests.get(f"https://rest.kegg.jp/find/genes/{locus}", timeout=2)
+            if r.ok:
+                # Lines look like: "avn:Avin_00080\tSome description..."
+                for line in r.text.splitlines():
+                    head = line.split("\t", 1)[0]  # e.g., "avn:Avin_00080"
+                    if head.endswith(locus) and ":" in head:
+                        org = head.split(":", 1)[0]
+                        _KEGG_GENE_CACHE[locus] = org
+                        return f"https://www.kegg.jp/dbget-bin/www_bget?{org}:{locus}"
+        except Exception:
+            pass
+
+    # 4) Last resort: old search link
+    return f"https://www.kegg.jp/dbget-bin/www_bfind?genes={locus}"
 
 def autolink_external_ids(value):
     if value is None:
@@ -93,12 +135,10 @@ def autolink_external_ids(value):
     ), s)
 
     # KEGG gene locus (e.g., Avin_00080)
-    def _link_locus(m):
-        prefix = m.group(1); locus = f"{prefix}_{m.group(2)}"
-        org = _KEGG_ORG_FOR_LOCUS.get(prefix)
-        url = (f"https://www.kegg.jp/dbget-bin/www_bget?{org}:{locus}"
-               if org else f"https://www.kegg.jp/dbget-bin/www_bfind?genes={locus}")
-        return f'<a target="_blank" rel="noopener" href="{url}">{locus}</a>'
+   def _link_locus(m):
+        locus = f"{m.group(1)}_{m.group(2)}"
+        url = kegg_gene_url(locus)
+    return f'<a target="_blank" rel="noopener" href="{url}">{locus}</a>'
     s = _LOCUS.sub(_link_locus, s)
 
     return Markup(s)

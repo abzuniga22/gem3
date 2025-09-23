@@ -201,6 +201,12 @@ def get_model_groups():
         ))
     out.sort(key=lambda x: x[0].lower())
     return out
+def get_model_files_for(model_name: str):
+    """Return just the (file_name, url) list for a single model name."""
+    for name, files in get_model_groups():  # [('CLasF17_M13', [(fn, url), ...]), ...]
+        if name == model_name:
+            return files
+    return []
 
 @app.route("/model")
 def model_page():
